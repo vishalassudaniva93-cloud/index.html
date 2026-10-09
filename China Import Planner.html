@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>China Import Planner</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#f3f5f8;--card:#fff;--ink:#0f1f3d;--mut:#5b6b85;--line:#dde3ec;--blue:#1f5fd6;--teal:#0e9f94;--warn:#c2410c;--bad:#b91c1c;--ok:#15803d;--inp:#fff}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0b1426;--card:#122039;--ink:#e6edf8;--mut:#93a4c0;--line:#243556;--blue:#6aa0ff;--teal:#2dd4bf;--inp:#0b1426}}
+:root[data-theme="dark"]{--bg:#0b1426;--card:#122039;--ink:#e6edf8;--mut:#93a4c0;--line:#243556;--blue:#6aa0ff;--teal:#2dd4bf;--inp:#0b1426}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{background:var(--card);border-bottom:1px solid var(--line);padding:10px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+h1{font-size:17px;margin:0;font-weight:700}h2{font-size:16px;margin:0 0 8px}
+.demo{background:#fff4d6;color:#7a5200;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600}
+nav{display:flex;gap:4px;overflow-x:auto;padding:8px 12px;background:var(--card);border-bottom:1px solid var(--line)}
+nav button{border:0;background:none;color:var(--mut);padding:7px 12px;border-radius:6px;cursor:pointer;font:inherit;white-space:nowrap}
+nav button.on{background:var(--blue);color:#fff}
+main{max-width:1150px;margin:0 auto;padding:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px;margin-bottom:14px}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
+.kpi b{display:block;font-size:20px}.kpi span{color:var(--mut);font-size:12px}
+.scroll{overflow-x:auto;max-width:100%}table{border-collapse:collapse;width:100%;min-width:640px}
+th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}th{color:var(--mut);font-weight:600;font-size:12px}
+input,select{background:var(--inp);color:var(--ink);border:1px solid var(--line);border-radius:5px;padding:5px 7px;font:inherit;max-width:100%}
+td input{width:84px}td input.w{width:150px}
+button.b{background:var(--blue);color:#fff;border:0;border-radius:6px;padding:7px 12px;cursor:pointer;font:inherit}button.g{background:none;color:var(--blue);border:1px solid var(--line)}
+label{display:block;font-size:12px;color:var(--mut)}.f{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:10px}
+.tag{padding:1px 7px;border-radius:10px;font-size:12px;font-weight:600}.red{background:#fde8e8;color:var(--bad)}.amb{background:#ffedd5;color:var(--warn)}.grn{background:#dcfce7;color:var(--ok)}
+.note{color:var(--mut);font-size:12px}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+svg{width:100%;height:auto;display:block}pre{white-space:pre-wrap;font:12px/1.6 ui-monospace,Menlo,monospace}
+</style></head><body>
+<header><h1>China Import Planner</h1><span class="demo">DEMO DATA: replace with your own</span>
+<span style="flex:1"></span><label style="display:flex;gap:6px;align-items:center">Currency view
+<select id="cur"><option>INR</option><option>CNY</option><option>USD</option></select></label></header>
+<nav id="nav"></nav><main id="app"></main>
+<script>
+const $=s=>document.querySelector(s);
+const TABS=['Dashboard','Products','Forecast','Landed cost','Inventory','What-if','Formulas'];
+const SET0={cnyInr:11.6,usdInr:84,igst:18,igstRecoverable:true,insPct:1.125,opexMonthly:30000,cover:30,z:1.65};
+const CATS=['Toys','Dental equipment','Massagers','Beauty','Home appliances','Sports & fitness','Gadgets','Other'];
+const DEMO=[
+{id:1,name:'Massage gun (demo)',sku:'MG-01',cat:'Massagers',cny:62,moq:200,carton:20,freight:38,other:22,duty:20,whole:690,retail:1199,stock:80,reserved:10,lead:55,manual:150,hist:'60,72,70,85,90,110,104,120'},
+{id:2,name:'STEM building toy (demo)',sku:'TY-07',cat:'Toys',cny:18,moq:500,carton:40,freight:11,other:9,duty:20,whole:240,retail:449,stock:600,reserved:0,lead:50,manual:200,hist:'40,35,38,60,120,140,90,50'},
+{id:3,name:'Dental scaler (demo)',sku:'DN-03',cat:'Dental equipment',cny:140,moq:50,carton:10,freight:60,other:80,duty:10,whole:2300,retail:3400,stock:12,reserved:2,lead:65,manual:20,hist:''}];
+let S,P;
+try{S=JSON.parse(localStorage.getItem('imp_s'))||{...SET0};P=JSON.parse(localStorage.getItem('imp_p'))||DEMO}catch(e){S={...SET0};P=JSON.parse(JSON.stringify(DEMO))}
+const save=()=>{try{localStorage.setItem('imp_s',JSON.stringify(S));localStorage.setItem('imp_p',JSON.stringify(P))}catch(e){}};
+let tab=0,sel=0,sc=1;
+const n=v=>isFinite(+v)?+v:0;
+const fx=()=>({INR:1,CNY:1/S.cnyInr,USD:1/S.usdInr}[$('#cur').value]);
+const money=v=>{const c=$('#cur').value;return ({INR:'₹',CNY:'¥',USD:'$'}[c])+(v*fx()).toLocaleString('en-IN',{maximumFractionDigits:c==='INR'?0:2})};
+const hist=p=>String(p.hist||'').split(',').map(s=>parseFloat(s)).filter(x=>isFinite(x));
+// ---- core formulas ----
+function landed(p,o={}){const cny=o.cny??n(p.cny),r=o.fx??S.cnyInr,fob=cny*r,fr=o.freight??n(p.freight),ins=(fob+fr)*S.insPct/100,cif=fob+fr+ins,
+ bcd=cif*(o.duty??n(p.duty))/100,sws=bcd*0.10,igst=(cif+bcd+sws)*S.igst/100,oth=n(p.other),
+ total=cif+bcd+sws+(S.igstRecoverable?0:igst)+oth;return{fob,fr,ins,cif,bcd,sws,igst,oth,total,cashOut:cif+bcd+sws+igst+oth}}
+const mean=a=>a.reduce((s,x)=>s+x,0)/(a.length||1);
+const sd=a=>{const m=mean(a);return Math.sqrt(mean(a.map(x=>(x-m)**2)))};
+const M={ma:h=>mean(h.slice(-3)),wma:h=>{const k=h.slice(-3),w=k.map((_,i)=>i+1);return k.reduce((s,x,i)=>s+x*w[i],0)/w.reduce((a,b)=>a+b,0)},
+ es:(h,a=.4)=>h.reduce((l,x,i)=>i?a*x+(1-a)*l:x,h[0]),
+ lin:h=>{const m=h.length,xs=h.map((_,i)=>i),mx=mean(xs),my=mean(h),b=xs.reduce((s,x,i)=>s+(x-mx)*(h[i]-my),0)/(xs.reduce((s,x)=>s+(x-mx)**2,0)||1);return Math.max(0,my+b*(m-mx))}};
+function forecast(p,method){const h=hist(p);
+ if(h.length<3)return{src:'Manual assumption (no sales history)',q:'Low',base:n(p.manual),sd:n(p.manual)*.35,method:'manual',h};
+ const m=method==='auto'?(h.length>=6?'wma':'ma'):method;
+ return{src:'Calculated from '+h.length+' months of actual sales',q:h.length>=6?'Medium':'Low',base:Math.max(0,M[m](h)),sd:sd(h),method:m,h}}
+function backtest(h,fn){const e=[],a=[];for(let i=3;i<h.length;i++){e.push(Math.abs(h[i]-fn(h.slice(0,i))));a.push(h[i])}
+ if(!e.length)return null;return{mae:mean(e),wape:e.reduce((s,x)=>s+x,0)/(a.reduce((s,x)=>s+x,0)||1)*100}}
+function inv(p){const f=forecast(p),d=f.base/30,sdd=f.sd/Math.sqrt(30),L=n(p.lead),avail=n(p.stock)-n(p.reserved),ss=S.z*sdd*Math.sqrt(L),rop=d*L+ss,
+ days=d>0?avail/d:Infinity,target=d*(L+S.cover)+ss,need=Math.max(0,target-avail),qty=need>0?Math.max(n(p.moq),Math.ceil(need)):0;
+ return{f,d,avail,ss,rop,days,qty,stockout:isFinite(days)?new Date(Date.now()+days*864e5):null,low:avail<=rop}}
+// ---- UI helpers ----
+const tag=(t,c)=>`<span class="tag ${c}">${t}</span>`;
+const kpi=(a,b)=>`<div class="card kpi"><span>${a}</span><b>${b}</b></div>`;
+function chart(series,labels,h=180){const all=series.flatMap(s=>s.v),mx=Math.max(1,...all)*1.1,W=640,pad=30,
+ X=i=>pad+i*(W-pad-8)/Math.max(1,labels.length-1),Y=v=>h-20-(v/mx)*(h-34);
+ return`<svg viewBox="0 0 ${W} ${h}" role="img" aria-label="Chart"><line x1="${pad}" y1="${h-20}" x2="${W}" y2="${h-20}" stroke="var(--line)"/>
+ ${series.map(s=>`<polyline fill="none" stroke="${s.c}" stroke-width="2" ${s.d?'stroke-dasharray="5 4"':''} points="${s.v.map((v,i)=>s.o!==undefined?X(i+s.o)+','+Y(v):X(i)+','+Y(v)).join(' ')}"/>`).join('')}
+ ${labels.map((l,i)=>`<text x="${X(i)}" y="${h-6}" font-size="10" fill="var(--mut)" text-anchor="middle">${l}</text>`).join('')}
+ <text x="2" y="12" font-size="10" fill="var(--mut)">${Math.round(mx)}</text></svg>`}
+// ---- views ----
+function dash(){let val=0,cap=0,rev=0,gp=0,alerts=[];
+ P.forEach(p=>{const l=landed(p),i=inv(p),u=Math.min(i.f.base,Math.max(i.avail,0)+i.qty);val+=i.avail*l.total;cap+=i.qty*l.cashOut;
+ rev+=i.f.base*n(p.whole);gp+=i.f.base*(n(p.whole)-l.total);
+ if(i.low)alerts.push(`${p.name}: stock ${i.avail} is at or below reorder point ${Math.round(i.rop)}`);
+ if(i.stockout&&i.days<n(p.lead))alerts.push(`${p.name}: expected stockout in ${Math.round(i.days)} days, before a new order (${p.lead} days) can arrive`);
+ if(i.days>180&&i.d>0)alerts.push(`${p.name}: ${Math.round(i.days)} days of stock, which is excess or slow-moving`);
+ if(i.f.base===0)alerts.push(`${p.name}: no demand estimate`)});
+ const net=gp-S.opexMonthly;
+ return`<div class="grid">${kpi('Inventory value (landed)',money(val))}${kpi('Cash needed for suggested orders',money(cap))}${kpi('Forecast monthly revenue (wholesale)',money(rev))}${kpi('Forecast monthly gross profit',money(gp))}${kpi('Est. net profit after opex',money(net))}${kpi('Products',P.length)}</div>
+ <div class="card"><h2>Alerts</h2>${alerts.length?alerts.map(a=>`<p>${tag('Alert','amb')} ${a}</p>`).join(''):'<p>No alerts.</p>'}</div>
+ <div class="card"><h2>Monthly opex estimate</h2><div class="row"><input type="number" value="${S.opexMonthly}" onchange="S.opexMonthly=+this.value;save();render()"> <span class="note">INR per month, your estimate</span></div></div>`}
+const FIELDS=[['name','Name','w'],['sku','SKU'],['cny','Price CNY'],['moq','MOQ'],['carton','Per carton'],['freight','Freight/unit ₹'],['other','Other/unit ₹'],['duty','Duty % (unverified)'],['whole','Wholesale ₹'],['retail','Retail ₹'],['stock','Stock'],['reserved','Reserved'],['lead','Lead days'],['manual','Manual demand/mo'],['hist','Monthly sales (comma list)','w']];
+function prods(){return`<div class="card"><div class="row"><button class="b" onclick="addP()">Add product</button><button class="b g" onclick="exportCSV()">Export CSV</button>
+ <label class="b g" style="color:var(--blue);cursor:pointer;margin:0;padding:7px 12px;border:1px solid var(--line);border-radius:6px">Import CSV<input type="file" accept=".csv" hidden onchange="importCSV(this)"></label>
+ <button class="b g" onclick="sampleCSV()">Sample template</button></div>
+ <p class="note">Duty rates are manual entries and unverified. Confirm the HS/ITC-HS code and current rate with your customs broker. Regulatory approvals (BIS, CDSCO and similar) depend on the exact product and need professional verification.</p>
+ <div class="scroll"><table><tr><th>Category</th>${FIELDS.map(f=>`<th>${f[1]}</th>`).join('')}<th></th></tr>
+ ${P.map((p,i)=>`<tr><td><select onchange="P[${i}].cat=this.value;save()">${[...new Set([...CATS,p.cat])].map(c=>`<option ${c==p.cat?'selected':''}>${c}</option>`).join('')}</select></td>
+ ${FIELDS.map(f=>`<td><input class="${f[2]||''}" value="${String(p[f[0]]??'').replace(/"/g,'&quot;')}" onchange="P[${i}]['${f[0]}']=${['name','sku','hist'].includes(f[0])?'this.value':'+this.value'};save()"></td>`).join('')}
+ <td><button class="b g" onclick="P.splice(${i},1);save();render()">Delete</button></td></tr>`).join('')}</table></div>
+ <div class="row" style="margin-top:10px"><input id="nc" placeholder="New category"><button class="b g" onclick="CATS.push($('#nc').value||'Custom');render()">Add category</button></div></div>`}
+function psel(){return`<div class="row"><label>Product <select onchange="sel=+this.value;render()">${P.map((p,i)=>`<option value="${i}" ${i==sel?'selected':''}>${p.name}</option>`).join('')}</select></label></div>`}
+let fm='auto';
+function fc(){const p=P[sel];if(!p)return'<p>Add a product first.</p>';const f=forecast(p,fm),h=f.h,band=1.28*f.sd;
+ const proj=[1,2,3,6,12].map(m=>{const q=f.base*m,lo=Math.max(0,q-band*Math.sqrt(m)),hi=q+band*Math.sqrt(m),c=landed(p).total;
+ return`<tr><td>${m===1?'30 days':m===2?'60 days':m===3?'90 days':m+' months'}</td><td>${Math.round(lo)} / <b>${Math.round(q)}</b> / ${Math.round(hi)}</td><td>${money(q*n(p.whole))}</td><td>${money(q*c)}</td><td>${money(q*(n(p.whole)-c))}</td></tr>`}).join('');
+ const bt=h.length>=6?[['Moving avg',M.ma],['Weighted MA',M.wma],['Exp. smoothing',M.es],['Linear trend',M.lin]].map(([k,fn])=>{const r=backtest(h,fn);return r?`<tr><td>${k}</td><td>${r.mae.toFixed(1)}</td><td>${r.wape.toFixed(1)}%</td></tr>`:''}).join(''):'';
+ const next=[1,2,3].map(()=>f.base);
+ return psel()+`<div class="card"><div class="row"><label>Method <select onchange="fm=this.value;render()">${[['auto','Auto'],['ma','Moving average'],['wma','Weighted moving average'],['es','Exponential smoothing'],['lin','Linear trend']].map(o=>`<option value="${o[0]}" ${fm==o[0]?'selected':''}>${o[1]}</option>`).join('')}</select></label>
+ ${tag('Data: '+f.q,f.q==='Low'?'amb':'grn')}</div>
+ <p><b>Source:</b> ${f.src}. Method used: <b>${f.method}</b>. ${f.method==='manual'?'This is your own assumption, not a prediction. Enter at least 3 months of sales to enable calculated forecasts.':'Seasonality is not modelled; with under 24 months of data it cannot be separated from noise.'}</p>
+ <p>Base demand: <b>${Math.round(f.base)}</b> units/month. Range uses ±1.28 standard deviations (about 80%).</p>
+ ${h.length?chart([{v:h,c:'var(--blue)'},{v:next,c:'var(--teal)',d:1,o:h.length}],[...h.map((_,i)=>'M'+(i+1)),'M'+(h.length+1),'M'+(h.length+2),'M'+(h.length+3)]):''}
+ <div class="scroll"><table><tr><th>Horizon</th><th>Units: worst / base / best</th><th>Revenue (wholesale)</th><th>COGS</th><th>Gross profit</th></tr>${proj}</table></div></div>
+ ${bt?`<div class="card"><h2>Back-test accuracy (one-step ahead, your actuals)</h2><div class="scroll"><table><tr><th>Method</th><th>MAE (units)</th><th>WAPE</th></tr>${bt}</table></div></div>`:''}`}
+function lc(){const p=P[sel];if(!p)return'<p>Add a product first.</p>';const l=landed(p),q=Math.max(n(p.moq),1);
+ const row=(a,v)=>`<tr><td>${a}</td><td>${money(v)}</td><td>${money(v*q)}</td></tr>`;
+ const be=n(p.whole)-l.total,units=be>0?Math.ceil(S.opexMonthly/be):'n/a';
+ return psel()+`<div class="card"><h2>Landed cost per unit (at MOQ ${q})</h2><div class="f">
+ <div><label>CNY→INR</label><input type="number" step="0.01" value="${S.cnyInr}" onchange="S.cnyInr=+this.value;save();render()"></div>
+ <div><label>USD→INR</label><input type="number" step="0.01" value="${S.usdInr}" onchange="S.usdInr=+this.value;save();render()"></div>
+ <div><label>IGST %</label><input type="number" value="${S.igst}" onchange="S.igst=+this.value;save();render()"></div>
+ <div><label>Insurance %</label><input type="number" step="0.001" value="${S.insPct}" onchange="S.insPct=+this.value;save();render()"></div>
+ <div><label>IGST recoverable as input credit?</label><select onchange="S.igstRecoverable=this.value==='1';save();render()"><option value="1" ${S.igstRecoverable?'selected':''}>Yes (GST-registered, eligible)</option><option value="0" ${S.igstRecoverable?'':'selected'}>No (cost)</option></select></div></div>
+ <div class="scroll"><table><tr><th>Item</th><th>Per unit</th><th>Total at MOQ</th></tr>
+ ${row('Factory price (FOB)',l.fob)}${row('Freight',l.fr)}${row('Insurance',l.ins)}${row('CIF / assessable value',l.cif)}${row('Basic customs duty ('+p.duty+'%, unverified)',l.bcd)}${row('Social Welfare Surcharge (10% of BCD)',l.sws)}${row('IGST '+(S.igstRecoverable?'(recoverable, excluded from cost)':'(non-recoverable, in cost)'),l.igst)}${row('Clearance, handling, inland, other',l.oth)}
+ <tr><th>Landed cost</th><th>${money(l.total)}</th><th>${money(l.total*q)}</th></tr></table></div>
+ <p>Cash outlay incl. recoverable IGST: <b>${money(l.cashOut*q)}</b>. Cost per carton: <b>${money(l.total*n(p.carton))}</b>.</p>
+ <div class="grid">${kpi('Wholesale profit/unit',money(be))}${kpi('Retail profit/unit',money(n(p.retail)-l.total))}${kpi('Wholesale margin',(n(p.whole)?be/n(p.whole)*100:0).toFixed(1)+'%')}${kpi('Markup on landed',(l.total?be/l.total*100:0).toFixed(1)+'%')}${kpi('Break-even price',money(l.total))}${kpi('Units to cover monthly opex',units)}</div></div>`}
+function stock(){return`<div class="card"><div class="row"><label>Cover target (days) <input type="number" value="${S.cover}" onchange="S.cover=+this.value;save();render()"></label><label>Service z-score <input type="number" step="0.01" value="${S.z}" onchange="S.z=+this.value;save();render()"></label></div>
+ <div class="scroll"><table><tr><th>Product</th><th>Available</th><th>Daily demand</th><th>Days left</th><th>Safety stock</th><th>Reorder pt</th><th>Suggested qty</th><th>Stockout date</th><th>Status</th></tr>
+ ${P.map(p=>{const i=inv(p),l=landed(p);const st=i.stockout&&i.days<n(p.lead)?tag('Stockout before arrival','red'):i.low?tag('Reorder now','amb'):i.days>180?tag('Excess','amb'):tag('OK','grn');
+ return`<tr><td>${p.name}</td><td>${i.avail}</td><td>${i.d.toFixed(1)}</td><td>${isFinite(i.days)?Math.round(i.days):'∞'}</td><td>${Math.round(i.ss)}</td><td>${Math.round(i.rop)}</td><td>${i.qty||'-'}${i.qty?` <span class="note">(${money(i.qty*l.cashOut)})</span>`:''}</td><td>${i.stockout?i.stockout.toLocaleDateString('en-IN'):'-'}</td><td>${st}</td></tr>`}).join('')}</table></div>
+ <p class="note">Suggested qty = demand over (lead time + cover days) + safety stock − available, raised to MOQ. It rests on the demand source shown on the Forecast tab. Manual-assumption products carry high uncertainty, so consider a test order.</p></div>`}
+const SCN={0.7:'Pessimistic',1:'Realistic',1.3:'Optimistic'};
+function wi(){const p=P[sel];if(!p)return'<p>Add a product first.</p>';const w=window.W=(window.W&&window.W.id===p.id)?window.W:{id:p.id,qty:n(p.moq),cny:n(p.cny),fx:S.cnyInr,fr:n(p.freight),duty:n(p.duty),price:n(p.whole),dem:forecast(p).base,def:2,mkt:0,pay:30};
+ const o=landed(p,{cny:w.cny,fx:w.fx,freight:w.fr,duty:w.duty}),dem=w.dem*sc,net=w.price*(1-w.def/100),unitProfit=net-o.total,months=dem>0?w.qty/dem:Infinity,
+ sold=Math.min(w.qty,dem*12),profit=sold*unitProfit-w.mkt*months,cap=w.qty*o.cashOut,roi=cap?profit/cap*100:0,unsold=Math.max(0,w.qty-dem*6);
+ const I=(k,l,s=1)=>`<div><label>${l}</label><input type="number" step="${s}" value="${w[k]}" oninput="W.${k}=+this.value;rr()"></div>`;
+ return psel()+`<div class="card"><div class="row">${Object.entries(SCN).map(([k,v])=>`<button class="b ${sc==k?'':'g'}" onclick="sc=${k};render()">${v}</button>`).join('')}<span class="note">Scenario scales demand by ×${sc}</span></div>
+ <div class="f">${I('qty','Order qty')}${I('cny','Supplier price CNY',.1)}${I('fx','CNY→INR',.01)}${I('fr','Freight/unit ₹')}${I('duty','Duty %')}${I('price','Selling price ₹')}${I('dem','Monthly demand')}${I('def','Return/defect %',.5)}${I('mkt','Marketing ₹/month')}${I('pay','Supplier credit days')}</div>
+ <div id="wo" class="grid">${wout(o,months,profit,cap,roi,unsold,unitProfit,dem)}</div>
+ <p class="note">Profit assumes sales over at most 12 months. Stockout risk: ${months<n(p.lead)/30?'order covers less than one lead time of demand':'order covers more than one lead time'}. Defect % is treated as revenue lost per unit.</p></div>`}
+function wout(o,months,profit,cap,roi,unsold,up,dem){const W=window.W;return kpi('Landed cost/unit',money(o.total))+kpi('Capital required',money(cap))+kpi('Profit/unit',money(up))+kpi('Break-even qty',up>0?Math.ceil(W.mkt*months/up||0)+' + 0 fixed':'never')+kpi('Expected profit (≤12 mo)',money(profit))+kpi('ROI',roi.toFixed(0)+'%')+kpi('Months to sell out',isFinite(months)?months.toFixed(1):'∞')+kpi('Unsold after 6 months',Math.round(unsold)+' units')+kpi('Payback',up>0&&dem>0?Math.max(0,months*0.5-W.pay/30).toFixed(1)+' mo after payment due':'n/a')}
+function rr(){const p=P[sel],W=window.W,o=landed(p,{cny:W.cny,fx:W.fx,freight:W.fr,duty:W.duty}),dem=W.dem*sc,up=W.price*(1-W.def/100)-o.total,months=dem>0?W.qty/dem:Infinity,sold=Math.min(W.qty,dem*12),profit=sold*up-W.mkt*months,cap=W.qty*o.cashOut;
+ $('#wo').innerHTML=wout(o,months,profit,cap,cap?profit/cap*100:0,Math.max(0,W.qty-dem*6),up,dem)}
+function formulas(){return`<div class="card"><h2>Formulas and assumptions</h2><pre>
+FOB (INR)        = price CNY × CNY→INR rate
+Insurance        = (FOB + freight) × insurance %
+CIF              = FOB + freight + insurance
+BCD              = CIF × duty %           (duty % is YOUR input, unverified)
+SWS              = 10% × BCD
+IGST             = (CIF + BCD + SWS) × IGST %
+Landed cost      = CIF + BCD + SWS + clearance/other (+ IGST only if not recoverable)
+Cash outlay      = landed cost including IGST (recoverable credit returns later)
+Margin %         = (price − landed) / price      Markup % = (price − landed) / landed
+Moving average   = mean of last 3 months
+Weighted MA      = last 3 months weighted 1,2,3
+Exp. smoothing   = level update with α = 0.4
+Linear trend     = least-squares line extended one step
+Range            = base ± 1.28 × σ × √months (about 80%)
+MAE / WAPE       = mean |error|;  Σ|error| / Σ actual (one-step back-test)
+Safety stock     = z × σ_daily × √lead time
+Reorder point    = daily demand × lead time + safety stock
+Suggested qty    = max(MOQ, demand × (lead + cover days) + safety − available)
+Source labels: Manual assumption = entered by you. Calculated = from your sales.
+No external market data, tariff rates or AI forecasts are connected. Verify rates and
+compliance (BIS, CDSCO, WPC etc.) with a broker or consultant before you order.</pre></div>`}
+function addP(){P.push({id:Date.now(),name:'New product',sku:'',cat:'Other',cny:0,moq:100,carton:10,freight:0,other:0,duty:0,whole:0,retail:0,stock:0,reserved:0,lead:45,manual:0,hist:''});save();render()}
+function dl(name,txt){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'text/csv'}));a.download=name;a.click()}
+const KEYS=['name','sku','cat',...FIELDS.slice(2).map(f=>f[0])];
+function exportCSV(){dl('products.csv',[KEYS.join(','),...P.map(p=>KEYS.map(k=>'"'+String(p[k]??'').replace(/"/g,'""')+'"').join(','))].join('\n'))}
+function sampleCSV(){dl('products-template.csv',KEYS.join(',')+'\n"Sample item","SKU-1","Toys",20,300,30,10,8,20,250,449,0,0,45,100,"10,12,14,13"')}
+function parseLine(l){const r=[];let c='',q=false;for(let i=0;i<l.length;i++){const ch=l[i];if(ch==='"'){if(q&&l[i+1]==='"'){c+='"';i++}else q=!q}else if(ch===','&&!q){r.push(c);c=''}else c+=ch}r.push(c);return r}
+function importCSV(el){const f=el.files[0];if(!f)return;f.text().then(t=>{const L=t.split(/\r?\n/).filter(x=>x.trim()),h=parseLine(L[0]).map(s=>s.trim()),miss=['name','cny','moq'].filter(k=>!h.includes(k));
+ if(miss.length)return alert('Missing required columns: '+miss.join(', ')+'. Use the sample template.');let add=0,err=[];
+ L.slice(1).forEach((l,i)=>{const c=parseLine(l),o={id:Date.now()+i};h.forEach((k,j)=>o[k]=['name','sku','cat','hist'].includes(k)?c[j]:+c[j]||0);
+ if(!o.name)err.push('Row '+(i+2)+': name is empty');else if(o.cny<0||o.moq<0)err.push('Row '+(i+2)+': negative number');else{P.push({lead:45,carton:1,...o});add++}});
+ save();render();alert(add+' products imported.'+(err.length?'\nSkipped:\n'+err.join('\n'):''))})}
+function render(){$('#nav').innerHTML=TABS.map((t,i)=>`<button class="${i==tab?'on':''}" onclick="tab=${i};render()">${t}</button>`).join('');
+ $('#app').innerHTML=[dash,prods,fc,lc,stock,wi,formulas][tab]()}
+$('#cur').onchange=render;render();
+</script></body></html>
